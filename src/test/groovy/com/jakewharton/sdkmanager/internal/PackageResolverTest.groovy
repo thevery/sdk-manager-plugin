@@ -5,6 +5,7 @@ import com.jakewharton.sdkmanager.SdkManagerExtension
 import com.jakewharton.sdkmanager.TemporaryFixture
 import com.jakewharton.sdkmanager.util.RecordingAndroidCommand
 import org.gradle.api.Project
+import org.gradle.api.tasks.StopExecutionException
 import org.gradle.testfixtures.ProjectBuilder
 import org.junit.Before
 import org.junit.Rule
@@ -13,6 +14,7 @@ import org.junit.Test
 import static com.android.SdkConstants.FN_LOCAL_PROPERTIES
 import static com.android.SdkConstants.SDK_DIR_PROPERTY
 import static org.fest.assertions.api.Assertions.assertThat
+import static org.fest.assertions.api.Assertions.failBecauseExceptionWasNotThrown
 
 class PackageResolverTest {
   @Rule public TemporaryFixture fixture = new TemporaryFixture();
@@ -338,5 +340,49 @@ class PackageResolverTest {
 
     packageResolver.resolveEmulator()
     assertThat(androidCommand).contains('update sys-img-armeabi-v7a-android-19')
+  }
+
+  @FixtureName("up-to-date-sdk-tools")
+  @Test public void upToDateSdkToolsRecognized() {
+    project.apply plugin: 'com.android.application'
+    project.extensions.create("sdkManager", SdkManagerExtension)
+    project.sdkManager {
+      minSdkToolsVersion '24.3.4'
+    }
+
+    packageResolver.resolveSdkTools()
+    assertThat(androidCommand).doesNotContain('update tools')
+  }
+
+  @FixtureName("outdated-sdk-tools")
+  @Test public void outdatedSdkToolsDownloaded() {
+    project.apply plugin: 'com.android.application'
+    project.extensions.create("sdkManager", SdkManagerExtension)
+    project.sdkManager {
+      minSdkToolsVersion '24.3.4'
+    }
+
+    packageResolver.resolveSdkTools()
+    assertThat(androidCommand).contains('update tools')
+  }
+
+  @FixtureName("up-to-date-sdk-tools")
+  @Test public void sdkToolsUnavailable() {
+    def tooBigMinSdkToolsVersion = '100500'
+
+    project.apply plugin: 'com.android.application'
+    project.extensions.create("sdkManager", SdkManagerExtension)
+    project.sdkManager {
+      minSdkToolsVersion tooBigMinSdkToolsVersion
+    }
+
+    try {
+      packageResolver.resolveSdkTools()
+      failBecauseExceptionWasNotThrown(StopExecutionException.class);
+    } catch (Exception e) {
+      assertThat(e)
+              .isInstanceOf(StopExecutionException.class)
+              .hasMessageEndingWith(tooBigMinSdkToolsVersion)
+    }
   }
 }

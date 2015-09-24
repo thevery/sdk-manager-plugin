@@ -4,6 +4,11 @@ Change Log
 Version 1.2.0 *(In Development)*
 --------------------------------
 
+ * New: SDK Tools will be updated if version is older than defined with sdkManager.minSdkToolsVersion
+   in build.gradle:
+      sdkManager {
+         minSdkToolsVersion '24.3.4'
+      }
  * New: Support for the 1.2.x Android plugin.
  * New: Download r24.2 Android SDK.
 

@@ -17,6 +17,7 @@ import static com.android.SdkConstants.FD_PLATFORMS
 import static com.android.SdkConstants.FD_ADDONS
 import static com.android.SdkConstants.FD_PLATFORM_TOOLS
 import static com.android.SdkConstants.FD_SYSTEM_IMAGES
+import static com.android.SdkConstants.FD_TOOLS
 
 class PackageResolver {
   static void resolve(Project project, File sdk) {
@@ -59,12 +60,63 @@ class PackageResolver {
   }
 
   def resolve() {
+    resolveSdkTools()
     resolveBuildTools()
     resolvePlatformTools()
     resolveCompileVersion()
     resolveSupportLibraryRepository()
     resolvePlayServiceRepository()
     resolveEmulator()
+  }
+
+  def resolveSdkTools() {
+    def minSdkToolsVersion = project.sdkManager.minSdkToolsVersion
+    if (minSdkToolsVersion == null) {
+      log.debug 'No minSdkToolsVersion defined'
+      return
+    }
+    log.debug "Found minSdkToolsVersion: $minSdkToolsVersion"
+
+    def sdkToolsDir = new File(sdk, FD_TOOLS)
+    def sdkToolsVersion = getPackageRevision(sdkToolsDir)
+    log.debug "Found sdkToolsVersion: $sdkToolsVersion"
+
+    def minSdkToolsRevision = FullRevision.parseRevision(minSdkToolsVersion)
+    def sdkToolsRevision = FullRevision.parseRevision(sdkToolsVersion)
+    def needsDownload = sdkToolsRevision < minSdkToolsRevision
+
+    if (!needsDownload) {
+      log.debug "SDK tools are up to date."
+      return
+    }
+
+    def sdkToolsPackage = "tools"
+    def currentSdkToolsInfo = androidCommand.list sdkToolsPackage
+    if (currentSdkToolsInfo == null || currentSdkToolsInfo.isEmpty()) {
+      throw new StopExecutionException('Could not get the current SDK tools revision.')
+    }
+
+    def matcher = Pattern.compile("revision\\ (.+)").matcher(currentSdkToolsInfo)
+    if (!matcher.find()) {
+      throw new StopExecutionException("Could not find the current SDK tools revision." +
+              " currentSdkToolsInfo: $currentSdkToolsInfo")
+    }
+
+    def currentSdkToolsVersion = matcher.group(1)
+    log.debug "currentSdkToolsVersion: $currentSdkToolsVersion"
+
+    def currentSdkToolsRevision = FullRevision.parseRevision(currentSdkToolsVersion)
+    if (currentSdkToolsRevision < minSdkToolsRevision) {
+      throw new StopExecutionException("Currently available SDK tools version($currentSdkToolsVersion)" +
+              " is smaller than defined in minSdkToolsVersion: $minSdkToolsVersion")
+    }
+
+    log.lifecycle "SDK tools $sdkToolsVersion outdated. Downloading update..."
+
+    def code = androidCommand.update sdkToolsPackage
+    if (code != 0) {
+      throw new StopExecutionException("SDK tools download failed with code $code.")
+    }
   }
 
   def resolveBuildTools() {
@@ -223,21 +275,7 @@ class PackageResolver {
       needsDownload = true
       log.lifecycle "Emulator $emulatorVersion $emulatorArchitecture missing. Downloading..."
     } else {
-      def emulatorPropertiesFile = new File(emulatorDir, 'source.properties')
-      if (!emulatorPropertiesFile.canRead()) {
-        emulatorPropertiesFile = new File(alternativeEmulatorDir, 'source.properties')
-        if (!emulatorPropertiesFile.canRead()) {
-          throw new StopExecutionException('Could not read ' + emulatorPropertiesFile.absolutePath)
-        }
-      }
-
-      def emulatorProperties = new Properties()
-      emulatorProperties.load(new FileInputStream(emulatorPropertiesFile))
-      def emulatorRevision = emulatorProperties.getProperty('Pkg.Revision')
-      if (emulatorRevision == null) {
-        throw new StopExecutionException('Could not get the installed emulator revision for ' +
-            emulatorPackage)
-      }
+      def emulatorRevision = getPackageRevision(emulatorDir, alternativeEmulatorDir)
 
       def currentEmulatorInfo = androidCommand.list emulatorPackage
       if (currentEmulatorInfo == null || currentEmulatorInfo.isEmpty()) {
@@ -264,6 +302,24 @@ class PackageResolver {
             "Emulator $emulatorVersion $emulatorArchitecture download failed with code $code.")
       }
     }
+  }
+
+  def getPackageRevision(File[] packageDirs) {
+    def propertiesFileName = 'source.properties'
+    def propertiesFile = packageDirs.collect { new File(it, propertiesFileName) }.find { it.canRead() }
+    if (propertiesFile == null) {
+      throw new StopExecutionException("Could not read '$propertiesFileName' from: $packageDirs")
+    }
+
+    def properties = new Properties()
+    properties.load(new FileInputStream(propertiesFile))
+    def revision = properties.getProperty('Pkg.Revision')
+    if (revision == null) {
+      throw new StopExecutionException("Could not read the revision from: ${propertiesFile.absolutePath}")
+    }
+
+    log.debug "Found revision for package ${propertiesFile.absolutePath}: $revision"
+    return revision
   }
 
   def findDependenciesWithGroup(String group) {

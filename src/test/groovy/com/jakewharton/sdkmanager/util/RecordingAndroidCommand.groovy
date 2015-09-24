@@ -16,10 +16,13 @@ final class RecordingAndroidCommand extends ArrayList<String> implements Android
 
   @Override String list(String filter) {
     add("list -a -e" as String)
-    return  "id: 55 or \"sys-img-armeabi-v7a-android-19\"\n" +
-            "     Type: SystemImage\n" +
-            "     Desc: Android SDK Platform 4.4.2\n" +
-            "           Revision 2\n" +
-            "           Requires SDK Platform Android API 19\n"
+    return "id: 1 or \"tools\"\n" +
+           "     Type: Tool\n" +
+           "     Desc: Android SDK Tools, revision 24.3.4\n" +
+           "id: 55 or \"sys-img-armeabi-v7a-android-19\"\n" +
+           "     Type: SystemImage\n" +
+           "     Desc: Android SDK Platform 4.4.2\n" +
+           "           Revision 2\n" +
+           "           Requires SDK Platform Android API 19\n"
   }
 }

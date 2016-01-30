@@ -138,12 +138,14 @@ class PackageResolver {
   }
 
   def resolvePlatformTools() {
-    if (folderExists(platformToolsDir)) {
-      log.debug 'Platform tools found!'
-      return
-    }
+//    if (folderExists(platformToolsDir)) {
+//      log.debug 'Platform tools found!'
+//      return
+//    }
+//
+//    log.lifecycle "Platform tools missing. Downloading..."
 
-    log.lifecycle "Platform tools missing. Downloading..."
+    log.lifecycle "Platform tools force update..."
 
     def code = androidCommand.update "platform-tools"
     if (code != 0) {
